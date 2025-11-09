@@ -144,7 +144,8 @@ def verify_face_local():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@api_blueprint.route('/db_embedding_local',methods=['Post'])
+
+@api_blueprint.route('/db_embedding_local', methods=['POST'])
 def db_embedding_local():
     try:
         data = request.get_json()
@@ -153,15 +154,18 @@ def db_embedding_local():
 
         folder_url = data.get("folder_url")
 
-        if not folder_url :
+        if not folder_url:
             return jsonify({"error": "Field 'folder_url' is required"}), 400
 
         embeddings = []
+        filenames = []
         failed = 0
         images_count = 0
+
         for filename in os.listdir(folder_url):
             path = os.path.join(folder_url, filename)
-            images_count+=1
+            images_count += 1
+
             if not os.path.isfile(path):
                 continue
             if not filename.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -171,8 +175,10 @@ def db_embedding_local():
                 student_image = face_recognition.load_image_file(path)
                 encodings = face_recognition.face_encodings(student_image)
                 if encodings:
-                    embeddings.append(encodings[0])
-                    embeddings.append(os.path.splitext(filename)[0])
+                    # Convert numpy array to list for JSON serialization
+                    encoding_list = encodings[0].tolist()
+                    embeddings.append(encoding_list)
+                    filenames.append(os.path.splitext(filename)[0])
                 else:
                     failed += 1
             except Exception as e:
@@ -186,9 +192,15 @@ def db_embedding_local():
         if not embeddings:
             return jsonify({"error": "No valid student faces found in the folder"}), 400
 
-
-
-        return jsonify({"encodings": embeddings}), 200
+        return jsonify({
+            "encodings": embeddings,
+            "filenames": filenames,
+            "stats": {
+                "total_images_processed": images_count,
+                "successful_embeddings": len(embeddings),
+                "failed_processing": failed
+            }
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
